@@ -7,10 +7,13 @@ import (
 
 //------ Package Variables ------//
 
-const BusCap = 10
+const(
+	BusCap = 100 
+	NumNodes = 1
+)
+
 //registered nodes on the Bus
 var nodes []*Transceiver
-var Bus chan Frame
 
 
 //------ Structs with Methods ------//
@@ -73,7 +76,7 @@ func (t *Transceiver) Filter(f Frame) {
 	if !t.waitingState {
 		if f.Id == t.sendingFrame.Id {
 			//received message was the one sent, may
-			//stop to try to send it	
+			//stop trying to send it	
 			t.waitingState = true
 			t.transmit = false
 			return
@@ -100,7 +103,7 @@ func (t *Transceiver) Run() {
 	for !t.BusOff {
 		//WAITING STATE
 		if t.waitingState {
-			//fmt.Println("<Transceiver> Waiting State") //debug
+			//fmt.Println("<Transceiver", t.Id, "> Waiting State") //debug
 			t.sendingFrame = <-t.Tx
 			t.waitingState = false
 			t.transmit = true
@@ -116,11 +119,11 @@ func (t *Transceiver) Run() {
 	}	
 }
 
-
-//------ Package Functions ------//
-func init() {
+func (t *Transceiver) debug() {
+	fmt.Println(t)
 }
 
+//------ Package Functions ------//
 
 /* Used to register a transceiver (as a node) in the Bus */
 func RegisterNode(t *Transceiver) {
@@ -143,36 +146,55 @@ func broadcast(f Frame)	{
 
 /* To be run on separate goroutine. Runs the bus simulation */
 func Simulate(Bus chan Frame) {
-
+	fmt.Println("Bus Simulation Started with", len(nodes), "nodes")
 	for {
 		f := <-Bus	
+		//DebugReport() //DEBUG
 		time.Sleep(time.Millisecond)	
 
 		//TODO arbitrate
-
 		broadcast(f)
 	}
 }
 
+func DebugReport() {
+	fmt.Println("<<< DEBUG REPORT >>>")
+	fmt.Println("<<< REGISTERED NODES : ", nodes)
+	fmt.Println("<<< REGISTERED NODES : ", nodes)
+	fmt.Println("<<< NODE STATUS")
+	for _, n := range nodes {
+		fmt.Println(n)
+	}
+}
 
 /* Runs a example with timed nodes and logger */
 func Example() {
-	fmt.Println("GoCAN example program")
+	fmt.Println("GoCAN example")
 
 	//initialize
-	bus := make(chan Frame, 10)
-	timed := NewTimedNode(bus, 1000, 10)
-	logger := NewLogger(bus, 20)
+	bus := make(chan Frame, BusCap)
+	var timeds []*timed
+	numOfNodes := NumNodes
+	for i := 1; i <= numOfNodes; i++ {
+		timeds = append(timeds, NewTimedNode(bus, i*1000, i*10))
+	} 
+	logger := NewLogger(bus, 0)
 
 	//register
-	RegisterNode(timed.T)
+	for _, t := range timeds {
+		//Register the nodes' transceivers into the bus
+		t := t //fresh variable copy
+		RegisterNode(t.T)
+	}
 	RegisterNode(logger.T)
 
 	//run
 	go Simulate(bus)
-	go timed.Start()
 	go logger.Start()
-
+	for _, t := range timeds {
+		t := t //fresh variable copy
+		go t.Start()
+	}
 
 	fmt.Scanln()
 }

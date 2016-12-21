@@ -36,13 +36,19 @@ type Transceiver struct {
 	//state machine variables
 	BusOff bool
 	waitingState bool
-	transmit bool
+	transmit chan bool //must be buffered
 }
 
 /* Called by app, requests the transceiver to send
    a frame to the Bus */
 func (t *Transceiver) Send(f Frame) {
-	t.Tx<- f
+	select {
+		case t.Tx<- f:
+			fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
+		default:
+			fmt.Println("Transceiver<", t.Id, "> DROPPED Frame on Send (Tx Full)")
+
+	}
 }
 
 /* Called by app, reads a received message. May block
@@ -78,15 +84,21 @@ func (t *Transceiver) Filter(f Frame) {
 			//received message was the one sent, may
 			//stop trying to send it	
 			t.waitingState = true
-			t.transmit = false
+			t.transmit<- false
 			return
 		} else {
-			t.transmit = true //retransmit
+			t.transmit<- true //retransmit
 		}
 	}
 	//TODO implement mask & filter logic
-	t.Rx<- f
-	//fmt.Println("<Transceiver> Received frame ", f) //debug
+	select { //select is used because BUS cannot block if Rx is full
+		case t.Rx <- f:
+			fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
+		default:		
+			fmt.Println("<Transceiver", t.Id, "> DROPPED frame(Rx Full) ", f) //debug
+	}
+	//t.Rx<- f
+	//fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
 }
 
 /* Called by the Bus simulation, shuts off this transceiver prohibiting
@@ -104,16 +116,20 @@ func (t *Transceiver) Run() {
 		//WAITING STATE
 		if t.waitingState {
 			//fmt.Println("<Transceiver", t.Id, "> Waiting State") //debug
-			t.sendingFrame = <-t.Tx
-			t.waitingState = false
-			t.transmit = true
-
+			select { //DEBUG - this select should not exist
+				case t.sendingFrame = <-t.Tx:
+ 					fmt.Println("<Transceiver", t.Id, "> Removed frame from Tx")	
+ 					t.waitingState = false
+					t.transmit<- true
+ 				default:
+ 					//fmt.Println("<Transceiver", t.Id, "> tx was of size ", len(t.Tx))
+			}
 		//SENDING STATE
 		} else {
-			if t.transmit { //TODO optimize this with bool channel
+			//fmt.Println("<Transceiver", t.Id, "> Sending state") //debug
+			if <-t.transmit { 
 				t.Bus<- t.sendingFrame
-				//fmt.Println("<Transceiver> Sent frame ", t.sendingFrame) //debug
-				t.transmit = false
+				fmt.Println("<Transceiver", t.Id, "> Sent frame to bus", t.sendingFrame) //debug
 			}
 		}
 	}	
@@ -138,8 +154,8 @@ func arbitrate() {
 
 /* Broadcasts the frame to all nodes in the Bus */
 func broadcast(f Frame)	{
-	for i := range nodes {
-		nodes[i].Filter(f)	
+	for _, t := range nodes {
+		t.Filter(f)	
 		//fmt.Println("<Bus> Broadcasted msg ", f) //debug
 	}
 }
@@ -149,6 +165,7 @@ func Simulate(Bus chan Frame) {
 	fmt.Println("Bus Simulation Started with", len(nodes), "nodes")
 	for {
 		f := <-Bus	
+		fmt.Println("<BUS> Retirada msg do chan bus")
 		//DebugReport() //DEBUG
 		time.Sleep(time.Millisecond)	
 
@@ -196,5 +213,5 @@ func Example() {
 		go t.Start()
 	}
 
-	fmt.Scanln()
+	//fmt.Scanln()
 }

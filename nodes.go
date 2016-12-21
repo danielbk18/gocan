@@ -27,6 +27,7 @@ func NewTimedNode(bus chan Frame, timeMs int, id int) *timed {
 		Rx : make(chan Frame, 3),
 		Bus : bus,
 		Id: id,
+		transmit: make(chan bool, 1),
 	}
 	
 	node := &timed{
@@ -45,7 +46,7 @@ func (node *timed) Start() {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(node.periodMs))
 
 	for tick := range ticker.C {
-		fmt.Println("tick", node.periodMs) //DEBUG
+		//fmt.Println("tick", node.periodMs) //DEBUG
 		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick})
 		fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
 	}

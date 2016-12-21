@@ -10,6 +10,7 @@ import (
 const(
 	BusCap = 100 
 	NumNodes = 1
+	BufferSize = 3
 )
 
 //registered nodes on the Bus
@@ -46,7 +47,7 @@ func (t *Transceiver) Send(f Frame) {
 		case t.Tx<- f:
 			fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
 		default:
-			fmt.Println("Transceiver<", t.Id, "> DROPPED Frame on Send (Tx Full)")
+			fmt.Println("Transceiver<", t.Id, "> DROPPED Frame on Send (Tx full", len(t.Tx), ")")
 
 	}
 }
@@ -115,15 +116,11 @@ func (t *Transceiver) Run() {
 	for !t.BusOff {
 		//WAITING STATE
 		if t.waitingState {
-			//fmt.Println("<Transceiver", t.Id, "> Waiting State") //debug
-			select { //DEBUG - this select should not exist
-				case t.sendingFrame = <-t.Tx:
- 					fmt.Println("<Transceiver", t.Id, "> Removed frame from Tx")	
- 					t.waitingState = false
-					t.transmit<- true
- 				default:
- 					//fmt.Println("<Transceiver", t.Id, "> tx was of size ", len(t.Tx))
-			}
+			fmt.Println("<Transceiver", t.Id, "> Waiting State, len(Tx) = ", len(t.Tx)) //debug
+			t.sendingFrame = <-t.Tx
+			fmt.Println("<Transceiver", t.Id, "> Removed frame from Tx")	
+			t.waitingState = false
+			t.transmit<- true		
 		//SENDING STATE
 		} else {
 			//fmt.Println("<Transceiver", t.Id, "> Sending state") //debug
@@ -162,7 +159,7 @@ func broadcast(f Frame)	{
 
 /* To be run on separate goroutine. Runs the bus simulation */
 func Simulate(Bus chan Frame) {
-	fmt.Println("Bus Simulation Started with", len(nodes), "nodes")
+	fmt.Println("<> Bus Simulation Started with", len(nodes), "nodes")
 	for {
 		f := <-Bus	
 		fmt.Println("<BUS> Retirada msg do chan bus")
@@ -191,8 +188,7 @@ func Example() {
 	//initialize
 	bus := make(chan Frame, BusCap)
 	var timeds []*timed
-	numOfNodes := NumNodes
-	for i := 1; i <= numOfNodes; i++ {
+	for i := 1; i <= NumNodes; i++ {
 		timeds = append(timeds, NewTimedNode(bus, i*1000, i*10))
 	} 
 	logger := NewLogger(bus, 0)
@@ -200,8 +196,8 @@ func Example() {
 	//register
 	for _, t := range timeds {
 		//Register the nodes' transceivers into the bus
-		t := t //fresh variable copy
-		RegisterNode(t.T)
+		t2 := t //fresh variable copy
+		RegisterNode(t2.T)
 	}
 	RegisterNode(logger.T)
 
@@ -209,8 +205,8 @@ func Example() {
 	go Simulate(bus)
 	go logger.Start()
 	for _, t := range timeds {
-		t := t //fresh variable copy
-		go t.Start()
+		t2 := t //fresh variable copy
+		go t2.Start()
 	}
 
 	//fmt.Scanln()

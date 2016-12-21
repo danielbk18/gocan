@@ -23,8 +23,8 @@ type logger struct {
 
 func NewTimedNode(bus chan Frame, timeMs int, id int) *timed {
 	t := &Transceiver{
-		Tx : make(chan Frame, 3), 
-		Rx : make(chan Frame, 3),
+		Tx : make(chan Frame, BufferSize), 
+		Rx : make(chan Frame, BufferSize),
 		Bus : bus,
 		Id: id,
 		transmit: make(chan bool, 1),
@@ -47,7 +47,7 @@ func (node *timed) Start() {
 
 	for tick := range ticker.C {
 		//fmt.Println("tick", node.periodMs) //DEBUG
-		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick})
+		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick}) 
 		fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
 	}
 }
@@ -56,8 +56,8 @@ func (node *timed) Start() {
 
 func NewLogger(bus chan Frame, id int) *logger {
 	t := &Transceiver{
-		Tx : make(chan Frame, 3), 
-		Rx : make(chan Frame, 3),
+		Tx : make(chan Frame, BufferSize), 
+		Rx : make(chan Frame, BufferSize),
 		Bus : bus,
 		Id: id,
 	}

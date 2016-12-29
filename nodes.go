@@ -9,7 +9,7 @@ import(
 
 type timed struct {
 	T *Transceiver
-	periodMs int
+	periodMs uint32
 }
 
 type logger struct {
@@ -21,13 +21,14 @@ type logger struct {
 
 /* --- timed methods --- */
 
-func NewTimedNode(bus chan Frame, timeMs int, id int) *timed {
+func NewTimedNode(bus chan Frame, timeMs uint32, id int) *timed {
 	t := &Transceiver{
 		Tx : make(chan Frame, BufferSize), 
 		Rx : make(chan Frame, BufferSize),
 		Bus : bus,
 		Id: id,
 		transmit: make(chan bool, 1),
+		Mask: 0xFFFFFFFF,
 	}
 	
 	node := &timed{
@@ -47,8 +48,8 @@ func (node *timed) Start() {
 
 	for tick := range ticker.C {
 		//fmt.Println("tick", node.periodMs) //DEBUG
-		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick}) 
-		fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
+		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick, Data: RandomData()}) 
+		//fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
 	}
 }
 

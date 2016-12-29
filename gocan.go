@@ -3,13 +3,14 @@ package gocan
 import (
 	"fmt"
 	"time"
+	"math/rand"
 )
 
 //------ Package Variables ------//
 
 const(
 	BusCap = 100 
-	NumNodes = 1
+	NumNodes = 10 
 	BufferSize = 3
 )
 
@@ -19,16 +20,16 @@ var nodes []*Transceiver
 
 //------ Structs with Methods ------//
 type Frame struct {
-	Id int
+	Id uint32
 	Rtr bool
 	Dlc uint8
-	Data [8]uint8
+	Data uint64
 	TimeStamp time.Time
 }
 
 type Transceiver struct {
-	mask uint32
-	filter uint32
+	Mask uint32
+	Filter uint32
 	Tx chan Frame
 	Rx chan Frame
 	Id int
@@ -45,7 +46,7 @@ type Transceiver struct {
 func (t *Transceiver) Send(f Frame) {
 	select {
 		case t.Tx<- f:
-			fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
+			//fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
 		default:
 			fmt.Println("Transceiver<", t.Id, "> DROPPED Frame on Send (Tx full", len(t.Tx), ")")
 
@@ -67,19 +68,19 @@ func (t *Transceiver) PendingMsgs() int {
 
 /* Sets the mask of the Transceiver */
 func (t *Transceiver) SetMask(newMask uint32) {
-	t.mask = newMask
+	t.Mask = newMask
 }
 
 /* Sets the filter of the Transceiver */
 func (t *Transceiver) SetFilter(newFilter uint32) {
-	t.filter = newFilter	
+	t.Filter = newFilter	
 }
 
 /* Called by the Bus simulation, handles a frame for the Transceiver
    to filter. If the msg passes the filter it is added to the RxBuffer.
    Also used to check if the incoming message was the last message sent,
    confirming that the msg sent was indeed transmitted. */
-func (t *Transceiver) Filter(f Frame) {
+func (t *Transceiver) FilterMsg(f Frame) {
 	if !t.waitingState {
 		if f.Id == t.sendingFrame.Id {
 			//received message was the one sent, may
@@ -91,15 +92,16 @@ func (t *Transceiver) Filter(f Frame) {
 			t.transmit<- true //retransmit
 		}
 	}
-	//TODO implement mask & filter logic
-	select { //select is used because BUS cannot block if Rx is full
-		case t.Rx <- f:
-			fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
-		default:		
-			fmt.Println("<Transceiver", t.Id, "> DROPPED frame(Rx Full) ", f) //debug
+	
+	maskedId := f.Id & t.Mask;
+	if maskedId == t.Filter {
+		select { //select is used because BUS cannot block if Rx is full
+			case t.Rx <- f:
+				//fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
+			default:		
+				fmt.Println("<Transceiver", t.Id, "> DROPPED frame on FILTER (Rx Full) ", f) //debug
+		}
 	}
-	//t.Rx<- f
-	//fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
 }
 
 /* Called by the Bus simulation, shuts off this transceiver prohibiting
@@ -116,9 +118,9 @@ func (t *Transceiver) Run() {
 	for !t.BusOff {
 		//WAITING STATE
 		if t.waitingState {
-			fmt.Println("<Transceiver", t.Id, "> Waiting State, len(Tx) = ", len(t.Tx)) //debug
+			//fmt.Println("<Transceiver", t.Id, "> Waiting State, len(Tx) = ", len(t.Tx)) //debug
 			t.sendingFrame = <-t.Tx
-			fmt.Println("<Transceiver", t.Id, "> Removed frame from Tx")	
+			//fmt.Println("<Transceiver", t.Id, "> Removed frame from Tx")	
 			t.waitingState = false
 			t.transmit<- true		
 		//SENDING STATE
@@ -126,7 +128,7 @@ func (t *Transceiver) Run() {
 			//fmt.Println("<Transceiver", t.Id, "> Sending state") //debug
 			if <-t.transmit { 
 				t.Bus<- t.sendingFrame
-				fmt.Println("<Transceiver", t.Id, "> Sent frame to bus", t.sendingFrame) //debug
+				//fmt.Println("<Transceiver", t.Id, "> Sent frame to bus", t.sendingFrame) //debug
 			}
 		}
 	}	
@@ -152,7 +154,7 @@ func arbitrate() {
 /* Broadcasts the frame to all nodes in the Bus */
 func broadcast(f Frame)	{
 	for _, t := range nodes {
-		t.Filter(f)	
+		t.FilterMsg(f)	
 		//fmt.Println("<Bus> Broadcasted msg ", f) //debug
 	}
 }
@@ -162,7 +164,7 @@ func Simulate(Bus chan Frame) {
 	fmt.Println("<> Bus Simulation Started with", len(nodes), "nodes")
 	for {
 		f := <-Bus	
-		fmt.Println("<BUS> Retirada msg do chan bus")
+		//fmt.Println("<BUS> Retirada msg do chan bus")
 		//DebugReport() //DEBUG
 		time.Sleep(time.Millisecond)	
 
@@ -181,6 +183,13 @@ func DebugReport() {
 	}
 }
 
+func RandomData() uint64 {
+	var data uint64
+	data = ( uint64(rand.Uint32()) << 32 ) | uint64(rand.Uint32())
+	return data
+}
+
+
 /* Runs a example with timed nodes and logger */
 func Example() {
 	fmt.Println("GoCAN example")
@@ -189,7 +198,7 @@ func Example() {
 	bus := make(chan Frame, BusCap)
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
-		timeds = append(timeds, NewTimedNode(bus, i*1000, i*10))
+		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
 	} 
 	logger := NewLogger(bus, 0)
 

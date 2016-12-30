@@ -21,10 +21,12 @@ type logger struct {
 
 /* --- timed methods --- */
 
-func NewTimedNode(bus chan Frame, timeMs uint32, id int) *timed {
+/* Returns a new TimedNode which sends random data messages every 'timeMs'
+   as soon the Start() method is called */
+func NewTimedNode(bus chan *Frame, timeMs uint32, id int) *timed {
 	t := &Transceiver{
-		Tx : make(chan Frame, BufferSize), 
-		Rx : make(chan Frame, BufferSize),
+		Tx : make(chan *Frame, BufferSize), 
+		Rx : make(chan *Frame, BufferSize),
 		Bus : bus,
 		Id: id,
 		transmit: make(chan bool, 1),
@@ -39,6 +41,7 @@ func NewTimedNode(bus chan Frame, timeMs uint32, id int) *timed {
 	return node 
 }
 
+/* Starts the Timed Node Simulation, must be run in a separate goroutine */
 func (node *timed) Start() {
 	//start node transceiver
 	go node.T.Run()
@@ -48,17 +51,19 @@ func (node *timed) Start() {
 
 	for tick := range ticker.C {
 		//fmt.Println("tick", node.periodMs) //DEBUG
-		node.T.Send(Frame{Id: node.periodMs, TimeStamp: tick, Data: RandomData()}) 
+		node.T.Send(&Frame{Id: node.periodMs, TimeStamp: tick, Data: RandomData()}) 
 		//fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
 	}
 }
 
 /* --- logger methods --- */
 
-func NewLogger(bus chan Frame, id int) *logger {
+/* Returns a new Logger Node, which prints every message present on the Bus 
+   as soon as the Start() method is called */
+func NewLogger(bus chan *Frame, id int) *logger {
 	t := &Transceiver{
-		Tx : make(chan Frame, BufferSize), 
-		Rx : make(chan Frame, BufferSize),
+		Tx : make(chan *Frame, BufferSize), 
+		Rx : make(chan *Frame, BufferSize),
 		Bus : bus,
 		Id: id,
 	}
@@ -70,6 +75,7 @@ func NewLogger(bus chan Frame, id int) *logger {
 	return node
 }
 
+/* Starts the Logger Node Simulation, must be run in a separate goroutine */
 func (node *logger) Start() {
 	//start node transceiver
 	go node.T.Run()

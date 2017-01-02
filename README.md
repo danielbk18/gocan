@@ -15,21 +15,15 @@ type timed struct {
 /* Returns a new TimedNode which sends random data messages every 'timeMs'
    as soon the Start() method is called */
 func NewTimedNode(bus chan *Frame, timeMs uint32, id int) *timed {
-	t := &Transceiver{
-		Tx : make(chan *Frame, BufferSize), 
-		Rx : make(chan *Frame, BufferSize),
-		Bus : bus.C,
-		Id: id,
-		transmit: make(chan bool, 1),
-		Mask: 0xFFFFFFFF,
-	}
+	t := NewTransceiver(bus, id)
+	t.Mask = 0xFFFFFFFF
 	
 	node := &timed{
 		T : t,
 		periodMs : timeMs,
 	}
 
-	return node 
+	return node  
 }
 
 /* Starts the Timed Node Simulation, must be run in a separate goroutine */
@@ -52,7 +46,7 @@ This Example Program shows how to start (NumNodes) timed Nodes with a Logger and
 ```go
 func Example() {
 	fmt.Println("GoCAN example")
-
+	
 	//initialize
 	bus := &Bus{Name: "Bus1",
 	            C: make(chan *Frame, BusCap)}
@@ -61,14 +55,6 @@ func Example() {
 		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
 	} 
 	logger := NewLogger(bus, 0)
-
-	//register
-	for _, t := range timeds {
-		//Register the nodes' transceivers into the bus
-		t2 := t //fresh variable copy
-		bus.RegisterNode(t2.T)
-	}
-	bus.RegisterNode(logger.T)
 
 	//run
 	go bus.Simulate()

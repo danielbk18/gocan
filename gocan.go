@@ -14,12 +14,12 @@ A basic simulation with involves three main GoRoutines:
 There are 3 main channels into play:
 - Transceiver.Rx (chan Frame)
 - Transceiver.Tx (chan Frame)
-- Bus            (chan Frame)
+- Bus.C          (chan Frame)
 
 The insertion/removal of Frames from these Channels are done by the following GoRoutines:
 
 Transceiver    ( Transceiver.Run()     )  <- Tx  <- Node App       ( Transceiver.Send()      )
-Bus Simulation ( Simulate()            )  <- Bus <- Transceiver    ( Transceiver.Run()       )
+Bus Simulation ( Bus.Simulate()        )  <- Bus <- Transceiver    ( Transceiver.Run()       )
 Node App       ( Transceiver.Receive() )  <- Rx  <- Bus Simulation ( Transceiver.FilterMsg() )
 
 A simple usage program can be seen in the Example() func.
@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"time"
 	"math/rand"
+	"errors"
 )
 
 //------ Package Variables ------//
@@ -40,8 +41,6 @@ const(
 	BufferSize = 3  //size of Rx and Tx buffers
 	ArbtDelay  = 3  //arbitration delay in ms
 )
-//registered nodes on the Bus
-var nodes []*Transceiver
 
 
 //------ Structs with its Methods ------//
@@ -81,12 +80,14 @@ func (f *Frame) String() string {
 
 /* Called by app, requests the transceiver to send
    a frame to the Bus */
-func (t *Transceiver) Send(f *Frame) {
+func (t *Transceiver) Send(f *Frame) error {
 	select {
 		case t.Tx<- f:
 			//fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
+			return nil
 		default:
-			fmt.Println("Transceiver<", t.Id, "> DROPPED Frame on Send (Tx full", len(t.Tx), ")")
+			fmt.Println("Transceiver<%d> DROPPED Frame on Send (Tx full %d)", t.Id, len(t.Tx))
+			return errors.New("Transceiver DROPPED Frame on Send (Tx full")
 
 	}
 }
@@ -101,28 +102,33 @@ func (t *Transceiver) Receive() *Frame {
    to filter. If the msg passes the filter it is added to the RxBuffer.
    Also used to check if the incoming message was the last message sent,
    confirming that the msg sent was indeed transmitted. */
-func (t *Transceiver) FilterMsg(f *Frame) {
+func (t *Transceiver) FilterMsg(f *Frame) error {
 	if !t.waitingState {
 		if f.Id == t.sendingFrame.Id {
 			//received message was the one sent, may
 			//stop trying to send it	
 			t.waitingState = true
 			t.transmit<- false
-			return
+			return nil
 		} else {
 			t.transmit<- true //retransmit
 		}
 	}
 	
+
 	maskedId := f.Id & t.Mask;
 	if maskedId == t.Filter {
 		select { //select is used because BUS Simulation cannot block if Rx is full
 			case t.Rx <- f:
 				//fmt.Println("<Transceiver", t.Id, "> Received frame ", f) //debug
+				return nil
 			default:		
 				fmt.Println("<Transceiver", t.Id, "> DROPPED frame on FILTER (Rx Full) ", f) //debug
+				return errors.New("<Transceiver> DROPPED frame on FILTER (Rx Full)")
 		}
 	}
+
+	return nil
 }
 
 /* Called by the Bus simulation, shuts off this transceiver prohibiting
@@ -161,10 +167,9 @@ func (bus *Bus) RegisterNode(t *Transceiver) {
 
 /* To be run on separate goroutine. Runs the bus simulation */
 func (bus *Bus) Simulate() {
-	fmt.Println("<> Bus Simulation Started with", len(nodes), "nodes")
+	fmt.Println("<> Bus Simulation Started with", len(bus.Nodes), "nodes")
 	for {
 		f := <-bus.C
-		//fmt.Println("<BUS> Retirada msg do chan bus")
 
 		//Sleeps to allow other nodes to input messages
 		time.Sleep(time.Millisecond * ArbtDelay)	
@@ -202,17 +207,28 @@ func (bus *Bus) broadcast(f *Frame)	{
 	}
 }
 
+
+
 //------ Package Functions ------//
-
-
-
-
-
 /* Generates random data for frames*/
 func RandomData() uint64 {
 	var data uint64
 	data = ( uint64(rand.Uint32()) << 32 ) | uint64(rand.Uint32())
 	return data
+}
+
+func NewTransceiver(bus *Bus, id int) *Transceiver {
+	t := &Transceiver{
+		Tx : make(chan *Frame, BufferSize), 
+		Rx : make(chan *Frame, BufferSize),
+		Bus : bus.C,
+		Id: id,
+		transmit: make(chan bool, 1),
+	}
+
+	bus.RegisterNode(t)
+
+	return t
 }
 
 
@@ -228,14 +244,6 @@ func Example() {
 		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
 	} 
 	logger := NewLogger(bus, 0)
-
-	//register
-	for _, t := range timeds {
-		//Register the nodes' transceivers into the bus
-		t2 := t //fresh variable copy
-		bus.RegisterNode(t2.T)
-	}
-	bus.RegisterNode(logger.T)
 
 	//run
 	go bus.Simulate()

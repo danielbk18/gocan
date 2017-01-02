@@ -24,14 +24,8 @@ type logger struct {
 /* Returns a new TimedNode which sends random data messages every 'timeMs'
    as soon the Start() method is called */
 func NewTimedNode(bus *Bus, timeMs uint32, id int) *timed {
-	t := &Transceiver{
-		Tx : make(chan *Frame, BufferSize), 
-		Rx : make(chan *Frame, BufferSize),
-		Bus : bus.C,
-		Id: id,
-		transmit: make(chan bool, 1),
-		Mask: 0xFFFFFFFF,
-	}
+	t := NewTransceiver(bus, id)
+	t.Mask = 0xFFFFFFFF
 	
 	node := &timed{
 		T : t,
@@ -50,7 +44,6 @@ func (node *timed) Start() {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(node.periodMs))
 
 	for tick := range ticker.C {
-		//fmt.Println("tick", node.periodMs) //DEBUG
 		node.T.Send(&Frame{Id: node.periodMs, TimeStamp: tick, Data: RandomData()}) 
 		//fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
 	}
@@ -61,12 +54,7 @@ func (node *timed) Start() {
 /* Returns a new Logger Node, which prints every message present on the Bus 
    as soon as the Start() method is called */
 func NewLogger(bus *Bus, id int) *logger {
-	t := &Transceiver{
-		Tx : make(chan *Frame, BufferSize), 
-		Rx : make(chan *Frame, BufferSize),
-		Bus : bus.C,
-		Id: id,
-	}
+	t := NewTransceiver(bus, id)
 	
 	node := &logger{
 		T : t,

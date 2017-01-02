@@ -71,7 +71,7 @@ func (node *logger) Start() {
 
 	for {
 		f := node.T.Receive()
-		//append(node.Log, f)
+		//node.log = append(node.Log, f)
 		fmt.Println("<Logger> ", f)
 	}
 }

@@ -30,14 +30,11 @@ func NewTimedNode(bus chan *Frame, timeMs uint32, id int) *timed {
 func (node *timed) Start() {
 	//start node transceiver
 	go node.T.Run()
-	fmt.Println("... Timed Node <", node.T.Id, "> Started")
 
 	ticker := time.NewTicker(time.Millisecond * time.Duration(node.periodMs))
 
 	for tick := range ticker.C {
-		//fmt.Println("tick", node.periodMs) //DEBUG
-		node.T.Send(&Frame{Id: node.periodMs, TimeStamp: tick, Data: RandomData()}) 
-		//fmt.Println("Node <", node.periodMs, "> sending Frame") //DEBUG
+		node.T.Send(&Frame{Id: 0x10, TimeStamp: tick, Data: RandomData()}) 
 	}
 }
 ```
@@ -46,7 +43,7 @@ This Example Program shows how to start (NumNodes) timed Nodes with a Logger and
 ```go
 func Example() {
 	fmt.Println("GoCAN example")
-	
+
 	//initialize
 	bus := &Bus{Name: "Bus1",
 	            C: make(chan *Frame, BusCap)}

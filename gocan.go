@@ -35,7 +35,7 @@ import (
 
 //------ Package Variables ------//
 
-const(
+var(
 	BusCap     = 20 //Capacity of Bus channel
 	NumNodes   = 10 //num of Timed Nodes in the Example Simulation
 	BufferSize = 3  //size of Rx and Tx buffers
@@ -172,7 +172,7 @@ func (bus *Bus) Simulate() {
 		f := <-bus.C
 
 		//Sleeps to allow other nodes to input messages
-		time.Sleep(time.Millisecond * ArbtDelay)	
+		time.Sleep(time.Millisecond * time.Duration(ArbtDelay))
 		var winner *Frame
 
 		//if another node put a frame in Bus during delay time, arbitrate

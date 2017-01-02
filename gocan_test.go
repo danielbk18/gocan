@@ -14,6 +14,7 @@ var(
 	f3  *Frame
 	t1  *Transceiver
 	t2  *Transceiver
+	t3  *Transceiver
 ) 
 
 const delay = 5
@@ -29,6 +30,7 @@ func TestMain(m *testing.M) {
     os.Exit(retCode)
 }
 
+/* ----- Internal funcs ----- */
 func wait() {
 	time.Sleep(time.Millisecond * delay)
 }
@@ -42,10 +44,13 @@ func cleanup() {
 		t2.Receive()
 	}
 
+	for i := 0; i < len(t3.Rx); i++ {
+		t3.Receive()
+	}
+
 }
 
 func setup() {
-	fmt.Println("... TEST SETUP ...")
 	f1 = &Frame{Id: 0x10}
 	f2 = &Frame{Id: 0x20}
 	f3 = &Frame{Id: 0x15}
@@ -55,16 +60,19 @@ func setup() {
 
 	t1 = NewTransceiver(bus, 1)
 	t2 = NewTransceiver(bus, 2)
+	t3 = NewTransceiver(bus, 3) 
 
 	go bus.Simulate()	
 	go t1.Run()
 	go t2.Run()
+	go t3.Run()
 
 	time.Sleep(time.Millisecond * delay)
 
 }
 
-func TestSendBasic(t *testing.T) {
+/* ------ TESTS ------ */
+func TestSend(t *testing.T) {
 	t1.Send(f1)	
 	wait()
 
@@ -88,20 +96,20 @@ func TestFiltering(t *testing.T) {
 	t2.Mask = 0xFFFFFFF0
 	t2.Filter = 0x10 
 
-	t1.Send(f1)
+	t1.Send(f1) //id 0x10
 	wait()
 	if len(t2.Rx) != 1 {
 		fmt.Println(len(t2.Rx))
 		t.Errorf("T2 should receive this frame")
 	}	
 
-	t1.Send(f3)
+	t1.Send(f3) //id 0x15
 	wait()
 	if len(t2.Rx) != 2 {
 		t.Errorf("T2 should receive this frame")
 	}	
 
-	t1.Send(f2)
+	t1.Send(f2) //id 0x20
 	wait()
 	if len(t2.Rx) != 2 {
 		t.Errorf("T2 should not receive this frame")
@@ -111,14 +119,30 @@ func TestFiltering(t *testing.T) {
 		t.Errorf("T1 shouldn't receive any frame")
 	}
 
+	t2.Mask = 0x0;
+	t2.Filter = 0x0;
 	cleanup()
 }
 
-func TestArbitration() {
-	//TODO	
+func TestArbitration(t *testing.T) {
+	t1.Send(f2) //id 0x20
+	t1.Send(f3) //id 0x15
+	t2.Send(f1) //id 0x10
+
+	wait()
+
+	if len(t3.Rx) != 3 {
+		t.Errorf("T3 should have received all frames")
+		fmt.Println("len(t3.Rx) = ", len(t3.Rx))
+	}
+
+	lastFrame := t3.Receive()
+
+	if lastFrame.Id != 0x20 {
+		t.Errorf("T3 should have received ID 0x10 first")
+	}
+
+
 }
 
-func TestShutFromBus() {
-	//TODO	
-}
 

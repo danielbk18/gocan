@@ -208,7 +208,6 @@ func (bus *Bus) broadcast(f *Frame)	{
 }
 
 
-
 //------ Package Functions ------//
 /* Generates random data for frames*/
 func RandomData() uint64 {

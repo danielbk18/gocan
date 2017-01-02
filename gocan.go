@@ -67,6 +67,12 @@ type Transceiver struct {
 	transmit chan bool //must be buffered(1)
 }
 
+type Bus struct {
+	Name  string
+	Nodes []*Transceiver
+	C     chan *Frame
+}
+
 /* Formats the Frame printing */
 func (f *Frame) String() string {
 	return fmt.Sprintf("<ID: %d, RTR: %t, DLC: %d, Data: %X, TimeStamp: %v", 
@@ -147,20 +153,17 @@ func (t *Transceiver) Run() {
 	}	
 }
 
-
-//------ Package Functions ------//
-
 /* Used to register a transceiver (as a node) in the Bus */
-func RegisterNode(t *Transceiver) {
+func (bus *Bus) RegisterNode(t *Transceiver) {
 	//TODO check if node was already added
-	nodes = append(nodes, t)
+	bus.Nodes = append(bus.Nodes, t)
 }
 
 /* To be run on separate goroutine. Runs the bus simulation */
-func Simulate(Bus chan *Frame) {
+func (bus *Bus) Simulate() {
 	fmt.Println("<> Bus Simulation Started with", len(nodes), "nodes")
 	for {
-		f := <-Bus	
+		f := <-bus.C
 		//fmt.Println("<BUS> Retirada msg do chan bus")
 
 		//Sleeps to allow other nodes to input messages
@@ -168,22 +171,22 @@ func Simulate(Bus chan *Frame) {
 		var winner *Frame
 
 		//if another node put a frame in Bus during delay time, arbitrate
-		if size := len(Bus); size > 0 {
-			winner = arbitrate(f, size, Bus)
+		if size := len(bus.C); size > 0 {
+			winner = bus.arbitrate(f, size)
 		} else {
 			winner = f
 		}
 
-		broadcast(winner)
+		bus.broadcast(winner)
 	}
 }
 
 /* Arbitrates with (size)nodes on Bus, winner is the one with Lowest Id,
    others are discarded and will be sent again by the Transceiver simulation */ 
-func arbitrate(f *Frame, size int, Bus chan *Frame) *Frame {
+func (bus *Bus) arbitrate(f *Frame, size int) *Frame {
 	winner := f
 	for i := 0; i < size; i++ {
-		frame := <-Bus
+		frame := <-bus.C
 		if frame.Id < winner.Id {
 			winner = frame
 		}
@@ -192,12 +195,18 @@ func arbitrate(f *Frame, size int, Bus chan *Frame) *Frame {
 }
 
 /* Broadcasts the frame to all nodes in the Bus */
-func broadcast(f *Frame)	{
-	for _, t := range nodes {
+func (bus *Bus) broadcast(f *Frame)	{
+	for _, t := range bus.Nodes{
 		t.FilterMsg(f)	
 		//fmt.Println("<Bus> Broadcasted msg ", f) //debug
 	}
 }
+
+//------ Package Functions ------//
+
+
+
+
 
 /* Generates random data for frames*/
 func RandomData() uint64 {
@@ -212,7 +221,8 @@ func Example() {
 	fmt.Println("GoCAN example")
 
 	//initialize
-	bus := make(chan *Frame, BusCap)
+	bus := &Bus{Name: "Bus1",
+	            C: make(chan *Frame, BusCap)}
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
 		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
@@ -223,12 +233,12 @@ func Example() {
 	for _, t := range timeds {
 		//Register the nodes' transceivers into the bus
 		t2 := t //fresh variable copy
-		RegisterNode(t2.T)
+		bus.RegisterNode(t2.T)
 	}
-	RegisterNode(logger.T)
+	bus.RegisterNode(logger.T)
 
 	//run
-	go Simulate(bus)
+	go bus.Simulate()
 	go logger.Start()
 	for _, t := range timeds {
 		t2 := t //fresh variable copy

@@ -18,7 +18,7 @@ func NewTimedNode(bus chan *Frame, timeMs uint32, id int) *timed {
 	t := &Transceiver{
 		Tx : make(chan *Frame, BufferSize), 
 		Rx : make(chan *Frame, BufferSize),
-		Bus : bus,
+		Bus : bus.C,
 		Id: id,
 		transmit: make(chan bool, 1),
 		Mask: 0xFFFFFFFF,
@@ -54,7 +54,8 @@ func Example() {
 	fmt.Println("GoCAN example")
 
 	//initialize
-	bus := make(chan *Frame, BusCap)
+	bus := &Bus{Name: "Bus1",
+	            C: make(chan *Frame, BusCap)}
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
 		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
@@ -65,12 +66,12 @@ func Example() {
 	for _, t := range timeds {
 		//Register the nodes' transceivers into the bus
 		t2 := t //fresh variable copy
-		RegisterNode(t2.T)
+		bus.RegisterNode(t2.T)
 	}
-	RegisterNode(logger.T)
+	bus.RegisterNode(logger.T)
 
 	//run
-	go Simulate(bus)
+	go bus.Simulate()
 	go logger.Start()
 	for _, t := range timeds {
 		t2 := t //fresh variable copy

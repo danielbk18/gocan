@@ -160,7 +160,7 @@ func TestTraffic(t *testing.T) {
 		}
 	}()
 
-	numMsg := 100 
+	numMsg := 500 
 
 	go func() {
 		for i := 0; i < numMsg; i++ {

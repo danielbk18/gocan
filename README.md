@@ -45,11 +45,11 @@ func Example() {
 	fmt.Println("GoCAN example")
 
 	//initialize
-	bus := &Bus{Name: "Bus1",
-	            C: make(chan *Frame, BusCap)}
+	bus := NewBus("Bus1")
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
-		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
+		node := NewTimedNode(bus, uint32(i*1000), i*10))
+		timeds = append(timeds, node)
 	} 
 	logger := NewLogger(bus, 0)
 

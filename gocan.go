@@ -131,7 +131,7 @@ func (t *Transceiver) FilterMsg(f *Frame) error {
 			return nil
 		} else {
 			t.transmit<- true //retransmit
-			fmt.Println("Transceiver <", t.Id, "> retransmitting Frame", t.sendingFrame) //DEBUG
+			//fmt.Println("Transceiver <", t.Id, "> retransmitting Frame", t.sendingFrame) //DEBUG
 		}
 	}
 	
@@ -289,7 +289,7 @@ func NewTransceiver(bus *Bus, id int) *Transceiver {
 func NewBus(name string) *Bus {
 	bus := &Bus{
 		Name: name,
-		C: make(chan *Frame, BusCap)
+		C: make(chan *Frame, BusCap),
 	}
 	return bus
 }
@@ -303,7 +303,7 @@ func Example() {
 	bus := NewBus("Bus1")
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
-		node := NewTimedNode(bus, uint32(i*1000), i*10))
+		node := NewTimedNode(bus, uint32(i*1000), i*10)
 		timeds = append(timeds, node)
 	} 
 	logger := NewLogger(bus, 0)

@@ -47,7 +47,7 @@ func setup() {
 	f2 = &Frame{Id: 0x20}
 	f3 = &Frame{Id: 0x15}
 
-	bus:= NewBus("Test Bus")
+	bus = NewBus("Test Bus")
 
 	t1 = NewTransceiver(bus, 1)
 	t2 = NewTransceiver(bus, 2)
@@ -135,6 +135,7 @@ func TestArbitration(t *testing.T) {
 
 }
 
+/* Generate high bus traffic */
 func TestTraffic(t *testing.T) {
 	cleanup()
 
@@ -144,39 +145,43 @@ func TestTraffic(t *testing.T) {
 	t2.Mask = 0xFFFFFFFF;
 	t2.Filter = 0x0;
 
-	finish1 := false
-	finish2 := false
+	finish1 := make(chan bool, 1)
+	finish2 := make(chan bool, 1)
+	done := false
 
 	var log []*Frame
 
-	done := make(chan bool, 1)	
 
 	//log until t1 and t2 are finished
 	go func() {
-		for !(finish1 && finish2) {
+		for !done {
 			f := t3.Receive()
 			log = append(log, f)
 		}
-		done<- true
 	}()
 
-	numMsg := 10
+	numMsg := 100 
 
 	go func() {
 		for i := 0; i < numMsg; i++ {
 			t1.Send(f1)
 		}
-		finish1 = true
+		finish1<- true
 	}()
 
 	go func() {
 		for i := 0; i < numMsg; i++ {
 			t2.Send(f2)		
 		}
-		finish2 = true
+		finish2<- true
 	}()
 
-	<-done//wait until its finished
+	//wait routines to finish sending
+	<-finish1
+	<-finish2
+	//wait for bus to propagate all sent messages
+	time.Sleep( time.Millisecond * 100)
+	done = true //stop logger
 
 	if len(log) != 2*numMsg {
 		t.Errorf("Log should have all messages sent")

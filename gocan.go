@@ -36,7 +36,7 @@ import (
 //------ Package Variables ------//
 
 var(
-	BusCap     = 20 //Capacity of Bus channel
+	BusCap     = 100 //Capacity of Bus channel
 	NumNodes   = 10 //num of Timed Nodes in the Example Simulation
 	BufferSize = 3  //size of Rx and Tx buffers
 	ArbtDelay  = 3  //arbitration delay in ms
@@ -79,14 +79,21 @@ func (f *Frame) String() string {
 }
 
 /* Called by app, requests the transceiver to send
-   a frame to the Bus */
-func (t *Transceiver) Send(f *Frame) error {
+   a frame to the Bus, may block until transceiver buffer has space */
+func (t *Transceiver) Send(f *Frame) {
+	t.Tx<- f
+}
+
+/* Non-Blocking Send. Called by app, requests the transceiver to send
+   a frame to the Bus, if transceiver buffer is full 
+   returns an error but doesnt block */
+func (t *Transceiver) NBSend(f *Frame) error {
 	select {
 		case t.Tx<- f:
 			//fmt.Println("Transceiver<", t.Id, "> Put Frame on Tx")
 			return nil
 		default:
-			fmt.Println("Transceiver<%d> DROPPED Frame on Send (Tx full %d)", t.Id, len(t.Tx))
+			fmt.Printf("Transceiver<%d> DROPPED Frame on Send (Tx full %d)", t.Id, len(t.Tx))
 			return errors.New("Transceiver DROPPED Frame on Send (Tx full")
 
 	}
@@ -96,6 +103,18 @@ func (t *Transceiver) Send(f *Frame) error {
    caller until there is a msg to read */
 func (t *Transceiver) Receive() *Frame {
 	return <-t.Rx
+}
+
+/* Non-Blocking Receive. Called by app, reads a received message. If Rx Buffer is
+   empty returns an error */
+func (t *Transceiver) NBReceive() (*Frame, error) {
+	var f *Frame
+	select {
+		case f = <-t.Rx:
+			return f, nil
+		default:
+			return nil, errors.New("Transceiver Rx Buffer was empty")
+	}
 }
 
 /* Called by the Bus simulation, handles a frame to the Transceiver
@@ -112,6 +131,7 @@ func (t *Transceiver) FilterMsg(f *Frame) error {
 			return nil
 		} else {
 			t.transmit<- true //retransmit
+			fmt.Println("Transceiver <", t.Id, "> retransmitting Frame", t.sendingFrame) //DEBUG
 		}
 	}
 	
@@ -159,6 +179,33 @@ func (t *Transceiver) Run() {
 	}	
 }
 
+/* Sets the transceiver to its initial state */
+func (t *Transceiver) Reset() {
+	t.BusOff = true;
+
+	size := len(t.Rx)
+	for i:=0; i < size; i++ {
+		<-t.Rx
+	}
+
+	size = len(t.Tx)
+	for i:=0; i < size; i++ {
+		<-t.Tx
+	}
+
+	select {
+	case <-t.transmit:
+	default:
+	}
+
+	t.waitingState = true
+	t.Filter = 0x00
+	t.Mask = 0x00
+	t.sendingFrame = nil
+
+	t.BusOff = false
+}
+
 /* Used to register a transceiver (as a node) in the Bus */
 func (bus *Bus) RegisterNode(t *Transceiver) {
 	//TODO check if node was already added
@@ -189,6 +236,7 @@ func (bus *Bus) Simulate() {
 /* Arbitrates with (size)nodes on Bus, winner is the one with Lowest Id,
    others are discarded and will be sent again by the Transceiver simulation */ 
 func (bus *Bus) arbitrate(f *Frame, size int) *Frame {
+	//fmt.Println("Arbitrating with size", size + 1) //+1 is the first frame removed
 	winner := f
 	for i := 0; i < size; i++ {
 		frame := <-bus.C
@@ -196,6 +244,7 @@ func (bus *Bus) arbitrate(f *Frame, size int) *Frame {
 			winner = frame
 		}
 	}
+	//fmt.Println("winner = ", winner) //DEBUG
 	return winner
 }
 
@@ -203,7 +252,15 @@ func (bus *Bus) arbitrate(f *Frame, size int) *Frame {
 func (bus *Bus) broadcast(f *Frame)	{
 	for _, t := range bus.Nodes{
 		t.FilterMsg(f)	
-		//fmt.Println("<Bus> Broadcasted msg ", f) //debug
+	}
+	//fmt.Println("<Bus> Broadcasted msg ", f) //debug
+}
+
+/** Cleans up the bus **/
+func (bus *Bus) Clean() {
+	size := len(bus.C)
+	for i:=0; i < size; i++ {
+		<-bus.C
 	}
 }
 
@@ -226,8 +283,15 @@ func NewTransceiver(bus *Bus, id int) *Transceiver {
 	}
 
 	bus.RegisterNode(t)
-
 	return t
+}
+
+func NewBus(name string) *Bus {
+	bus := &Bus{
+		Name: name,
+		C: make(chan *Frame, BusCap)
+	}
+	return bus
 }
 
 
@@ -236,11 +300,11 @@ func Example() {
 	fmt.Println("GoCAN example")
 
 	//initialize
-	bus := &Bus{Name: "Bus1",
-	            C: make(chan *Frame, BusCap)}
+	bus := NewBus("Bus1")
 	var timeds []*timed
 	for i := 1; i <= NumNodes; i++ {
-		timeds = append(timeds, NewTimedNode(bus, uint32(i*1000), i*10))
+		node := NewTimedNode(bus, uint32(i*1000), i*10))
+		timeds = append(timeds, node)
 	} 
 	logger := NewLogger(bus, 0)
 

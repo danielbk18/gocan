@@ -63,6 +63,7 @@ func Example() {
 
 }
 ```
+To have a node on multiple buses just embed a Transceiver for every bus connected to the Node.
 
 ## Installation
 

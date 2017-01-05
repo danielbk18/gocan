@@ -233,6 +233,13 @@ func (bus *Bus) Simulate() {
 	}
 }
 
+/* Stops the simulation */
+func (bus *Bus) Stop() {
+	for _, t := range bus.Nodes{
+		t.shutFromBus()
+	}
+}
+
 /* Arbitrates with (size)nodes on Bus, winner is the one with Lowest Id,
    others are discarded and will be sent again by the Transceiver simulation */ 
 func (bus *Bus) arbitrate(f *Frame, size int) *Frame {
